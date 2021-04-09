@@ -1,4 +1,4 @@
-//All new component structs should derive debug for error messaging to work correctly.
+//All component data structures should derive debug for error messaging to work correctly.
 #[derive(Debug)]
 pub struct Vector2 {
     pub x: u32,
