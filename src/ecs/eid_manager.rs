@@ -14,7 +14,7 @@ impl EidManager {
         }
     }
 
-    //Create an available EID.
+    //Returns the eid for an entity and a hash representing the user.
     pub fn create(&mut self) -> usize {
         match self.eid_q.remove() {
             Ok(eid) => eid,
