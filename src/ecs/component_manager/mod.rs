@@ -1,71 +1,47 @@
-mod components;
-pub use self::components::Component; //re-export to use in mod.rs
+//New component data structures should be defined and then pub use in this directory.
 
-//Declare new components here for src/component_manager/.
+//Component data structures. Add to this list for new components.
 pub mod vector2;
+pub use super::vector2::Vector2;
 
 #[derive(Debug)]
 pub enum ErrCm {
     FailedToAdd(String),
-    EntityHasComponent(String),
     EntityNoComponents(String),
     EntityComponentNotFound(String),
 }
 
-pub struct ComponentManager { //Maybe have EidManager here too?
-    //Eid->Vec<Component>
-    components: Vec<Vec<Component>>
+//Define components as an Option of their data structure.
+struct Components {
+    position: Vec<Option<Vector2>>,
 }
 
+pub struct ComponentManager {
+    component_size: usize,
+    components : Components,
+}
+
+//Define getter/setter for each component.
 impl ComponentManager {
     pub fn new() -> ComponentManager {
         ComponentManager {
-            components: vec![vec![]]
-        }
-    }
-
-    //Compares 2 enum variants to see if they are equal. The value associated with it does not matter; Source: https://stackoverflow.com/questions/32554285/compare-enums-only-by-variant-not-value
-    pub fn component_variant_eq(comp1: &Component, comp2: &Component) -> bool {
-        std::mem::discriminant(comp1) == std::mem::discriminant(comp2)
-    }
-
-    pub fn get_component(&mut self, eid: &usize, component: &Component) -> Result<&mut Component, ErrCm> {
-        match self.components.get_mut(eid.clone()) {
-            Some(entity_components) => {
-                match entity_components.iter_mut().find(|c| ComponentManager::component_variant_eq(component, c)) {
-                    Some(found) => Ok(found),
-                    None => Err(ErrCm::EntityComponentNotFound(format!("eid: {}, component: {:?}", &eid, component)))
-                }
-            },
-            None => Err(ErrCm::EntityNoComponents(format!("eid: {}, component: {:?}", &eid, component)))
-        }
-    }
-
-    //Add a component to an entity's components if it doesn't already have it.
-    pub fn add_component(&mut self, eid: &usize, component: Component) -> Result<(), ErrCm> {
-        match self.get_component(&eid, &component) {
-            Ok(cmp) => Err(ErrCm::EntityHasComponent(format!("eid: {}", &eid))),
-            Err(e) => match e {
-                ErrCm::EntityComponentNotFound(_) => {
-                    match self.components.get_mut(eid.clone()) {
-                        Some(vec) => {
-                            vec.push(component);
-                            Ok(())
-                        },
-                        None => Err(ErrCm::FailedToAdd(format!("{:?}", component)))
-                    }
-                }
-                _ => Err(ErrCm::FailedToAdd(format!("{:?}", component)))
+            component_size: 0,
+            components: Components {
+                position: vec![],
             }
         }
     }
-}
 
-/*
-match self.components.get_mut(eid.clone()) {
-    Some(vec) => {
-        vec.push(component);
-        Ok(())
-    },
-    None => Err(ErrCm::FailedToAdd(format!("{:?}", component)))
-}*/
+    pub fn set_position(&mut self, entity_id: &usize, position: Option<Vector2>) {
+        if entity_id >= &self.component_size {
+            self.components.position.push(position);
+            self.component_size += 1;
+        } else {
+            self.components.position[*entity_id] = position;
+        }
+    }
+
+    pub fn get_position(&self, entity_id: &usize) -> &Option<Vector2> {
+        &self.components.position[*entity_id]
+    }
+}
