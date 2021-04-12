@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use std::hash::Hasher;
 
 mod eid_manager;
-pub mod component_manager;
+mod component_manager;
+mod c_data;
 
 use self::eid_manager::EidManager;
-use self::component_manager::*; //brings in all data types as well.
+pub use self::component_manager::*;
+pub use self::c_data::*;
 
 //Wrapper for EidManager and ComponentManager.
 pub struct ECS {
@@ -32,17 +34,17 @@ impl ECS {
     }
 
     //Creates and returns an eid mapped to a user.
-    pub fn create(&mut self, user: &str) -> usize {
+    pub fn create_for(&mut self, user: &str) -> usize {
         let auth = ECS::hash(user);
         let eid = self.eid_manager.create();
+        self.component_manager.reserve();
 
-        match self.entity_owner.get_mut(&auth) {
-            Some(owned) => owned.push(eid),
-            None => {
-                self.entity_owner.insert(auth, vec![eid]);
-                ()
-            }
+        if let Some(owned) = self.entity_owner.get_mut(&auth) {
+            owned.push(eid);
+        } else {
+            self.entity_owner.insert(auth, vec![eid]);
         }
+
         eid
     }
 
@@ -50,32 +52,31 @@ impl ECS {
     pub fn free(&mut self, eid: usize, user: &str) {
         let auth = ECS::hash(user);
 
-        //remove entry from HashMap
-        match self.entity_owner.get_mut(&auth) {
-            Some(owned) => {
-                owned.clear();
-                self.entity_owner.remove(&auth);
-            },
-            None => ()
+        //remove an eid from the owned eids of a user.
+        if let Some(owned) = self.entity_owner.get_mut(&auth) {
+            owned.remove(eid);
         }
 
-        //TODO Next Time:
-        //Clear all vector components. Probably need a better way of handling this.
-        //Maybe register a number of function pointers for get() and iterate through?
-        //  ^ Maybe return it from the component manager itself?...Geterator...
-        match self.component_manager.get_position(&eid) {
-            Some(v) => self.component_manager.set_position(&eid, None),
-            None => ()
-        }
-
+        //free component slots and make eid available.
+        self.component_manager.free(&eid);
         self.eid_manager.free(eid);
     }
 
-    pub fn get_position(&self, eid: &usize) {
-        ()
+    pub fn get_component_mut(&mut self, eid: &usize, user: &str, which: Find) -> Result<&mut Component, ErrCm> {
+        self.component_manager.get_component_mut(eid, which)
     }
 
-    pub fn set_position(&mut self, eid: &usize, position: Option<Vector2>) {
-        ()
+    pub fn set_component(&mut self, eid: &usize, user: &str, which: Find, component: Component) -> Result<(), ErrCm> {
+        let auth = ECS::hash(user);
+
+        if let Some(owned) = self.entity_owner.get_mut(&auth) {
+            if owned.iter().any(|&owned_eid| owned_eid == *eid) {
+                self.component_manager.set_component(eid, which, component)
+            } else {
+                Err(ErrCm::UserDoesNotOwn(format!("user: {}, eid: {}", user, eid)))
+            }
+        } else {
+            Err(ErrCm::UserNotFound(format!("user: {}", user)))
+        }
     }
 }
