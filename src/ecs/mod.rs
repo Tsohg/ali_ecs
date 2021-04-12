@@ -10,12 +10,12 @@ use self::eid_manager::EidManager;
 pub use self::component_manager::*;
 pub use self::c_data::*;
 
-//Wrapper for EidManager and ComponentManager.
+//Wrapper for EidManager and ComponentManager that utilizies their functions correctly.
 pub struct ECS {
     eid_manager: EidManager,
     component_manager: ComponentManager,
     //user hash -> eid.
-    entity_owner: HashMap<u64, Vec<usize>>,
+    entity_ownership: HashMap<u64, Vec<usize>>,
 }
 
 impl ECS {
@@ -23,7 +23,7 @@ impl ECS {
         ECS {
             eid_manager: EidManager::new(),
             component_manager: ComponentManager::new(),
-            entity_owner: HashMap::new()
+            entity_ownership: HashMap::new()
         }
     }
 
@@ -35,14 +35,13 @@ impl ECS {
 
     //Creates and returns an eid mapped to a user.
     pub fn create_for(&mut self, user: &str) -> usize {
-        let auth = ECS::hash(user);
         let eid = self.eid_manager.create();
         self.component_manager.reserve();
 
-        if let Some(owned) = self.entity_owner.get_mut(&auth) {
+        if let Some(owned) = self.entity_ownership.get_mut(&ECS::hash(user)) {
             owned.push(eid);
         } else {
-            self.entity_owner.insert(auth, vec![eid]);
+            self.entity_ownership.insert(ECS::hash(user), vec![eid]);
         }
 
         eid
@@ -50,10 +49,8 @@ impl ECS {
 
     //Frees an eid from a user.
     pub fn free(&mut self, eid: usize, user: &str) {
-        let auth = ECS::hash(user);
-
         //remove an eid from the owned eids of a user.
-        if let Some(owned) = self.entity_owner.get_mut(&auth) {
+        if let Some(owned) = self.entity_ownership.get_mut(&ECS::hash(user)) {
             owned.remove(eid);
         }
 
@@ -62,21 +59,37 @@ impl ECS {
         self.eid_manager.free(eid);
     }
 
-    pub fn get_component_mut(&mut self, eid: &usize, user: &str, which: Find) -> Result<&mut Component, ErrCm> {
-        self.component_manager.get_component_mut(eid, which)
-    }
-
-    pub fn set_component(&mut self, eid: &usize, user: &str, which: Find, component: Component) -> Result<(), ErrCm> {
-        let auth = ECS::hash(user);
-
-        if let Some(owned) = self.entity_owner.get_mut(&auth) {
+    //Checks to see if a user owns a particular eid.
+    pub fn authenticate(&self, eid: &usize, user: &str) -> Result<(), ErrCm> {
+        if let Some(owned) = self.entity_ownership.get(&ECS::hash(user)) {
             if owned.iter().any(|&owned_eid| owned_eid == *eid) {
-                self.component_manager.set_component(eid, which, component)
+                Ok(())
             } else {
                 Err(ErrCm::UserDoesNotOwn(format!("user: {}, eid: {}", user, eid)))
             }
         } else {
             Err(ErrCm::UserNotFound(format!("user: {}", user)))
+        }
+    }
+
+    pub fn get_component(&self, eid: &usize, user: &str, which: Find) -> Result<&Component, ErrCm> {
+        match self.authenticate(eid, user) {
+            Ok(_) => self.component_manager.get_component(eid, which),
+            Err(msg) => Err(msg)
+        }
+    }
+
+    pub fn get_component_mut(&mut self, eid: &usize, user: &str, which: Find) -> Result<&mut Component, ErrCm> {
+        match self.authenticate(eid, user) {
+            Ok(_) => self.component_manager.get_component_mut(eid, which),
+            Err(msg) => Err(msg)
+        }
+    }
+
+    pub fn set_component(&mut self, eid: &usize, user: &str, which: Find, component: Component) -> Result<(), ErrCm> {
+        match self.authenticate(eid, user) {
+            Ok(_) => self.component_manager.set_component(eid, which, component),
+            Err(msg) => Err(msg)
         }
     }
 }

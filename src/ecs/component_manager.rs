@@ -2,6 +2,15 @@ use std::collections::HashMap;
 
 use super::c_data::*;
 
+/*
+* How to Add a new component:
+*   Add the component data structure to c_data.rs (or maybe later, a c_data directory).
+*   Add the component name to the enum Component with its data structure as a parameter.
+*   Add the component name to the enum Find without parameters.
+*   In ComponentManager::new() => Insert the new component into the hashmap using Find::component_name as the key, and an empty data_structure as the argument.
+*       {Denoted by comment in Component::new()}
+*/
+
 //Container for a component's data type.
 #[derive(Debug)]
 pub enum Component {
@@ -25,7 +34,8 @@ impl ComponentManager {
         let mut cm = ComponentManager {
             components: HashMap::new(),
         };
-        //Insert all components.
+
+        //Insert all components here.
         cm.components.insert(Find::Position, vec![]);
         cm
     }
