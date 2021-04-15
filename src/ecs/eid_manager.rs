@@ -1,6 +1,11 @@
 extern crate queues;
 use queues::*;
 
+pub struct Entity {
+    pub id: usize,
+    pub component_bitmask: u32,
+}
+
 pub struct EidManager {
     eid_max: usize,
     eid_q: Queue<usize>
@@ -15,18 +20,26 @@ impl EidManager {
     }
 
     //Returns the eid for an entity and a hash representing the user.
-    pub fn create(&mut self) -> usize {
+    pub fn create(&mut self) -> Entity {
         match self.eid_q.remove() {
-            Ok(eid) => eid,
+            Ok(eid) => {
+                Entity {
+                    id: eid,
+                    component_bitmask: 0
+                }
+            },
             Err(_) => {
                 self.eid_max += 1;
-                self.eid_max
+                Entity {
+                    id: self.eid_max,
+                    component_bitmask: 0
+                }
             }
         }
     }
 
-    //Make an EID available and give up ownership of it.
-    pub fn free(&mut self, eid: usize) {
-        self.eid_q.add(eid);
+    //Make an entity available and give up ownership of it.
+    pub fn free(&mut self, entity: &Entity) {
+        self.eid_q.add(entity.id);
     }
 }
