@@ -47,7 +47,7 @@ impl ECS {
     }
 
     //Frees an eid from a user.
-    pub fn free(&mut self, entity: Entity, user: &str) {
+    pub fn free(&mut self, entity: Entity, user: &str) { //Entity should go out of scope here and be dropped.
         //remove an eid from the owned eids of a user.
         if let Some(owned) = self.entity_ownership.get_mut(&ECS::hash(user)) {
             owned.remove(entity.id);
@@ -81,6 +81,27 @@ impl ECS {
     pub fn get_component_mut(&mut self, entity: &Entity, user: &str, which: Find) -> Result<&mut Component, ErrCm> {
         match self.authenticate(entity, user) {
             Ok(_) => self.component_manager.get_component_mut(entity, &which),
+            Err(msg) => Err(msg)
+        }
+    }
+
+    pub fn add_component(&mut self, entity: &mut Entity, user: &str, which: Find, component: Component) -> Result<(), ErrCm> {
+        match self.authenticate(entity, user) {
+            Ok(_) => self.component_manager.add_component(entity, which, component),
+            Err(msg) => Err(msg)
+        }
+    }
+
+    pub fn update_component(&mut self, entity: &Entity, user: &str, which: Find, component: Component) -> Result<(), ErrCm> {
+        match self.authenticate(entity, user) {
+            Ok(_) => self.component_manager.update_component(entity, which, component),
+            Err(msg) => Err(msg)
+        }
+    }
+
+    pub fn remove_component(&mut self, entity: &mut Entity, user: &str, which: Find) -> Result<(), ErrCm> {
+        match self.authenticate(entity, user) {
+            Ok(_) => self.component_manager.remove_component(entity, which),
             Err(msg) => Err(msg)
         }
     }
