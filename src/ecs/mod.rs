@@ -59,50 +59,54 @@ impl ECS {
     }
 
     //Checks to see if a user owns a particular eid.
-    pub fn authenticate(&self, entity: &Entity, user: &str) -> Result<(), ErrCm> {
+    pub fn authenticate(&self, entity: &Entity, user: &str) -> Result<(), ErrEcs> {
         if let Some(owned) = self.entity_ownership.get(&ECS::hash(user)) {
             if owned.iter().any(|&owned_eid| owned_eid == entity.id) {
                 Ok(())
             } else {
-                Err(ErrCm::UserDoesNotOwn(format!("user: {}, eid: {}", user, &entity.id)))
+                Err(ErrEcs::UserDoesNotOwn(format!("user: {}, eid: {}", user, &entity.id)))
             }
         } else {
-            Err(ErrCm::UserNotFound(format!("user: {}", user)))
+            Err(ErrEcs::UserNotFound(format!("user: {}", user)))
         }
     }
 
-    pub fn get_component(&self, entity: &Entity, user: &str, which: Find) -> Result<&Component, ErrCm> {
-        match self.authenticate(entity, user) {
-            Ok(_) => self.component_manager.get_component(entity, &which),
-            Err(msg) => Err(msg)
-        }
+    pub fn get_component(&self, entity: &Entity, user: &str, which: Find) -> Result<&Component, ErrEcs> {
+        self.authenticate(entity, user)?;
+        self.component_manager.get_component(entity, &which)
     }
 
-    pub fn get_component_mut(&mut self, entity: &Entity, user: &str, which: Find) -> Result<&mut Component, ErrCm> {
-        match self.authenticate(entity, user) {
-            Ok(_) => self.component_manager.get_component_mut(entity, &which),
-            Err(msg) => Err(msg)
-        }
+    pub fn get_component_mut(&mut self, entity: &Entity, user: &str, which: Find) -> Result<&mut Component, ErrEcs> {
+        self.authenticate(entity, user)?;
+        self.component_manager.get_component_mut(entity, &which)
     }
 
-    pub fn add_component(&mut self, entity: &mut Entity, user: &str, which: Find, component: Component) -> Result<(), ErrCm> {
-        match self.authenticate(entity, user) {
-            Ok(_) => self.component_manager.add_component(entity, which, component),
-            Err(msg) => Err(msg)
-        }
+    pub fn add_component(&mut self, entity: &mut Entity, user: &str, which: Find, component: Component) -> Result<(), ErrEcs> {
+        self.authenticate(entity, user)?;
+        self.component_manager.add_component(entity, which, component)
     }
 
-    pub fn update_component(&mut self, entity: &Entity, user: &str, which: Find, component: Component) -> Result<(), ErrCm> {
-        match self.authenticate(entity, user) {
-            Ok(_) => self.component_manager.update_component(entity, which, component),
-            Err(msg) => Err(msg)
-        }
+    pub fn update_component(&mut self, entity: &Entity, user: &str, which: Find, component: Component) -> Result<(), ErrEcs> {
+        self.authenticate(entity, user)?;
+        self.component_manager.update_component(entity, which, component)
     }
 
-    pub fn remove_component(&mut self, entity: &mut Entity, user: &str, which: Find) -> Result<(), ErrCm> {
-        match self.authenticate(entity, user) {
-            Ok(_) => self.component_manager.remove_component(entity, which),
-            Err(msg) => Err(msg)
-        }
+    pub fn remove_component(&mut self, entity: &mut Entity, user: &str, which: Find) -> Result<(), ErrEcs> {
+        self.authenticate(entity, user)?;
+        self.component_manager.remove_component(entity, which)
     }
+}
+
+#[derive(Debug)]
+pub enum ErrEcs {
+    //Ecs
+    UserNotFound(String),
+    UserDoesNotOwn(String),
+
+    //Component Manager
+    UnallocatedComponent(String),
+    EidOutOfBounds(String),
+    ComponentAlreadyExists(String),
+    EntityComponentNotFound(String),
+    ComponentCategoryNotFound(String),
 }

@@ -7,32 +7,20 @@ use crate::ecs::*;
 *       Should be mappable via a function: fn(input, fn)
 */
 
-fn main() {
+fn main() -> Result<(), ErrEcs>{
     let mut ecs = ECS::new();
-    let mut entity = ecs.create_for("Alias");
+    let user = "Alias";
+    let mut entity = ecs.create_for(user);
 
-    match ecs.add_component(&mut entity, "Alias", Find::Position, Component::Position(Vector2{x: 0, y: 0})) {
-        Ok(_) => println!("Added"),
-        Err(e) => println!("{:#?}", e)
-    }
+    //Adding components
+    ecs.add_component(&mut entity, &user, Find::Position, Component::Position(Vector2{x: 0, y: 1}))?;
 
-    match ecs.add_component(&mut entity, "Alias", Find::Position, Component::Position(Vector2{x: 0, y: 1})) {
-        Ok(_) => println!("Added"),
-        Err(e) => println!("{:#?}", e)
-    }
+    //Retrieving components
+    let pos = ecs.get_component(&entity, &user, Find::Position)?;
+    println!("{:#?}", pos);
 
-    match ecs.update_component(&mut entity, "Alias", Find::Position, Component::Position(Vector2{x: 100, y: 100})) {
-        Ok(_) => println!("Updated."),
-        Err(e) => println!("{:#?}", e)
-    }
+    //Error propagated
+    ecs.get_component(&mut entity, "Bacon", Find::Position)?;
 
-    match ecs.remove_component(&mut entity, "Alias", Find::Position) {
-        Ok(_) => println!("Removed."),
-        Err(e) => println!("{:#?}", e)
-    }
-
-    match ecs.get_component_mut(&entity, "Alias", Find::Position) {
-        Ok(comp) => println!("{:#?}", comp),
-        Err(e) => println!("{:#?}", e)
-    }
+    Ok(())
 }
