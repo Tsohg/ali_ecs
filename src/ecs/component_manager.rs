@@ -101,7 +101,7 @@ impl ComponentManager {
     }
 
     //Returns an immutable packed array of eids for a given component.
-    pub fn get_component_packed(&self, which: Find) -> Result<&Vec<usize>, ErrEcs> {
+    pub fn get_packed_components(&self, which: Find) -> Result<&Vec<usize>, ErrEcs> {
         match self.packed_components.get(ComponentManager::get_component_id(&which)) {
             Some(vec) => Ok(vec),
             None => Err(ErrEcs::ComponentCategoryNotFound(format!("category: {:#?}", which)))

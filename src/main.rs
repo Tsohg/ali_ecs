@@ -3,8 +3,9 @@ use crate::ecs::*;
 
 /*
 * TODO:
-*    Implement an input system that fires a function when a certain input is given.
-*       Should be mappable via a function: fn(input, fn)
+*    Implement the first system to move positions.
+*    Each system should have it's own thread.
+*    New systems should be easy to add.
 */
 
 fn main() -> Result<(), ErrEcs>{
