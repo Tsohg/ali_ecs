@@ -1,10 +1,13 @@
 use std::sync::mpsc;
+use std::sync::mpsc::Sender;
+use std::sync::mpsc::Receiver;
 
-pub trait System {
-    fn start(&self) -> Send; //returns the transmitter to the system thread.
-    fn stop(&self, tx: Send); //stops the system thread and takes ownership of the transmitter returned from start() so that it goes out of scope.
-}
+pub mod messages;
+pub use messages::*;
 
-pub enum Systems {
-    Position,
+pub mod position_system;
+pub use position_system::PositionSystem;
+
+pub trait System<T> {
+    fn start() -> Box<Sender<T>>; //returns the transmitter to the system thread.
 }

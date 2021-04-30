@@ -32,9 +32,10 @@ mod component_manager;
 mod systems;
 mod c_data;
 pub use self::c_data::*; //all data structures for the components.
+use self::systems::*;
 use self::component_manager::*;
 use self::eid_manager::*;
-use self::systems::*;
+
 
 /*
 * How to Add a new component:
@@ -66,6 +67,7 @@ pub struct ECS {
     component_manager: ComponentManager,
     //user hash -> eid.
     entity_ownership: HashMap<u64, Vec<usize>>,
+    //system_txs: HashMap<Find, Box<Sender<T>>>, //Transmitters to system threads. WIP
 }
 
 impl ECS {
@@ -73,7 +75,8 @@ impl ECS {
         ECS {
             eid_manager: EidManager::new(),
             component_manager: ComponentManager::new(),
-            entity_ownership: HashMap::new()
+            entity_ownership: HashMap::new(),
+            //system_txs: HashMap::new(),
         }
     }
 
@@ -121,6 +124,23 @@ impl ECS {
         }
     }
 
+    //WIP
+    /*pub fn start_systems(&mut self) {
+
+    }
+
+    fn start_system(&mut self, system: &impl System) -> Box<Send> {
+        Box::new(system.start())
+    }
+
+    pub fn stop_systems(&mut self) {
+
+    }
+
+    fn stop_system(&mut self, system: &impl System) {
+
+    }*/
+
     pub fn get_component(&self, entity: &Entity, user: &str, which: Find) -> Result<&Component, ErrEcs> {
         self.authenticate(entity, user)?;
         self.component_manager.get_component(entity, &which)
@@ -136,10 +156,11 @@ impl ECS {
         self.component_manager.add_component(entity, which, component)
     }
 
-    pub fn update_component(&mut self, entity: &Entity, user: &str, which: Find, component: Component) -> Result<(), ErrEcs> {
+    //Should probably be done only through a system.
+    /*pub fn update_component(&mut self, entity: &Entity, user: &str, which: Find, component: Component) -> Result<(), ErrEcs> {
         self.authenticate(entity, user)?;
         self.component_manager.update_component(entity, which, component)
-    }
+    }*/
 
     pub fn remove_component(&mut self, entity: &mut Entity, user: &str, which: Find) -> Result<(), ErrEcs> {
         self.authenticate(entity, user)?;
