@@ -1,6 +1,6 @@
 [package]
 name = "ali_ecs"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Tsohg <asaneoil@gmail.com>"]
 edition = "2018"
 
@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 queues = "1.0.0"
+variant_count = "1.1"

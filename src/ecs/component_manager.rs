@@ -2,30 +2,7 @@ use std::collections::HashMap;
 
 use super::c_data::*;
 use super::eid_manager::*;
-use super::ErrEcs;
-
-/*
-* How to Add a new component:
-*   Add the component data structure to c_data.rs (or maybe later, a c_data directory).
-*   Add the component name to the enum Component with its data structure as a parameter.
-*   Add the component name to the enum Find without parameters.
-*   Increment total_components in ComponentManager::new();
-*   Give the component an index in ComponentManager::get_component_id()
-*   Give the component a bit in ComponentManager::get_component_bit()
-*/
-
-//Container for a component's data type.
-#[derive(Debug)]
-pub enum Component {
-    Position(Vector2),
-    None,
-}
-
-//Used for component searching in the hash map.
-#[derive(Debug, PartialEq, Eq, Hash)]
-pub enum Find {
-    Position,
-}
+use super::*;
 
 pub struct ComponentManager {
     components: Vec<Vec<Component>>,
@@ -40,36 +17,35 @@ impl ComponentManager {
             packed_components: vec![],
         };
 
-        //Initialize vectors to the number of total components.
-        let total_components = 1;
-        for i in 0..total_components {
+        assert!(Find::VARIANT_COUNT == Component::VARIANT_COUNT - 1);
+
+        //Initialize vectors to the number of total components based on the length of Find enum.
+        for i in 0..Find::VARIANT_COUNT {
             cm.components.push(vec![]);
             cm.packed_components.push(vec![]);
         }
         cm
     }
 
-    //Associated Functions
     //Get the vector index of a particular set of components.
     pub fn get_component_id(which: &Find) -> usize {
         match which {
-            Find::Position => 0,
+            Find::Pos2 => 0,
         }
     }
 
     //Get the bit in which a component is represented in the bitmask.
     pub fn get_component_bit(which: &Find) -> u32 {
         match which {
-            Find::Position => 1,
+            Find::Pos2 => 1,
         }
     }
 
     //Returns true if the entity has the specified component.
-    pub fn has_component(entity: &Entity, which: &Find) -> bool {
+    pub fn entity_has_component(entity: &Entity, which: &Find) -> bool {
         let bit = ComponentManager::get_component_bit(which);
         ((entity.component_bitmask & bit) == bit)
     }
-    //End Associated Functions
 
     //Reserves memory for an entity's components.
     pub fn reserve(&mut self) {
@@ -146,7 +122,7 @@ impl ComponentManager {
     }
 
     pub fn add_component(&mut self, entity: &mut Entity, which: Find, component: Component) -> Result<(), ErrEcs> {
-        if ComponentManager::has_component(entity, &which) {
+        if ComponentManager::entity_has_component(entity, &which) {
             return Err(ErrEcs::ComponentAlreadyExists(format!("eid: {}, component: {:#?}", entity.id, which)))
         }
 
@@ -167,7 +143,7 @@ impl ComponentManager {
     }
 
     pub fn update_component(&mut self, entity: &Entity, which: Find, with: Component) -> Result<(), ErrEcs> {
-        if !ComponentManager::has_component(entity, &which) {
+        if !ComponentManager::entity_has_component(entity, &which) {
             return Err(ErrEcs::EntityComponentNotFound(format!("eid: {}, component: {:#?}", entity.id, which)))
         }
 
@@ -181,7 +157,7 @@ impl ComponentManager {
     }
 
     pub fn remove_component(&mut self, entity: &mut Entity, which: Find) -> Result<(), ErrEcs> {
-        if !ComponentManager::has_component(entity, &which) {
+        if !ComponentManager::entity_has_component(entity, &which) {
             return Err(ErrEcs::EntityComponentNotFound(format!("eid: {}, component: {:#?}", entity.id, which)))
         }
 
