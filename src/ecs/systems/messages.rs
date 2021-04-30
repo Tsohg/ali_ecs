@@ -1,23 +1,24 @@
 use crate::ecs::c_data::*;
+use crate::ecs::eid_manager::Entity;
 
-//System messages for the Pos2 component. First parameter is the entity id as usize.
+//Message data that is passed into a system.
 #[derive(Debug)]
-pub enum Pos2Msg {
-    //Stops the system. All system messages should contain this variant.
+pub enum SystemMessage{ //Position Message
+    //Stops the system.
     Stop(),
 
     //Replaces the current Vector2 with the given Vector2
-    Set(usize, Vector2),
+    Pos2Set(Entity, Vector2),
 
     //Vector mathematical operations.
-    Add(usize, Vector2),
-    Sub(usize, Vector2),
-    Mul(usize, Vector2),
-    Div(usize, Vector2),
+    Pos2Add(Entity, Vector2),
+    Pos2Sub(Entity, Vector2),
+    Pos2Mul(Entity, Vector2),
+    Pos2Div(Entity, Vector2),
 
     //Vector increments/decrements
-    IncX(usize),
-    IncY(usize),
-    DecX(usize),
-    DecY(usize),
+    Pos2IncX(Entity),
+    Pos2IncY(Entity),
+    Pos2DecX(Entity),
+    Pos2DecY(Entity),
 }

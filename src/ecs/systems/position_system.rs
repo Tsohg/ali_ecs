@@ -2,25 +2,27 @@ use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::sync::mpsc::Receiver;
 use std::thread;
-use std::time::Duration;
 
 use super::*;
 
-//WIP
 pub struct PositionSystem {}
-impl System<Pos2Msg> for PositionSystem {
-    fn start() -> Box<Sender<Pos2Msg>> {
-        let (tx, rx): (Sender<Pos2Msg>, Receiver<Pos2Msg>) = mpsc::channel();
+
+impl SystemStart for PositionSystem {
+    fn start() -> Box<Sender<SystemMessage>> {
+        let (tx, rx): (Sender<SystemMessage>, Receiver<SystemMessage>) = mpsc::channel();
         thread::spawn(move|| {
             loop {
-                match rx.recv_timeout(Duration::from_millis(1)) {
+                match rx.recv() {
                     Ok(msg) => {
                         match msg {
-                            Pos2Msg::Stop() => break,
-                            _ => println!("{:#?}", msg),
+                            SystemMessage::Stop() => break,
+                            SystemMessage::Pos2Set(en, v2) => { //TODO: Replace with function calls.
+                                //cm.update_component(&en, Find::Pos2, Component::Pos2(v2)); //PROBLEM
+                            },
+                            _ => println!("Catch all: {:#?}", msg),
                         }
                     },
-                    Err(_) => () //ignore timeout errors.
+                    Err(e) => println!("{}", e)
                 }
             }
         });

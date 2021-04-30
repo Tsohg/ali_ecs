@@ -21,6 +21,7 @@ For more details see: <http://www.gnu.org/licenses/>.
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
+use std::sync::mpsc::Sender;
 
 //externals
 extern crate variant_count;
@@ -32,13 +33,14 @@ mod component_manager;
 mod systems;
 mod c_data;
 pub use self::c_data::*; //all data structures for the components.
+pub use self::systems::messages::SystemMessage;
+use self::component_manager::ComponentManager;
 use self::systems::*;
-use self::component_manager::*;
 use self::eid_manager::*;
 
 
 /*
-* How to Add a new component:
+* How to add a new component:
 *   Add the component data structure to c_data.rs (or maybe later, a c_data directory).
 *   Add the component name to the enum Component with its data structure as a parameter.
 *   Add the component name to the enum Find without parameters.
@@ -46,6 +48,15 @@ use self::eid_manager::*;
 *   Compiler will complain until you:
 *       Give the component an index in ComponentManager::get_component_id()
 *       Give the component a bit in ComponentManager::get_component_bit()
+*/
+
+/*
+* How to add a new system:
+*    Create: ecs/systems/my_system.rs
+*       Create a message enum ecs/systems/messages. The bare minimum requires a stop message.
+*       Implement System trait's start function to start the thread and return its transmitter that uses the above message enum as its type.
+*    In start_systems(), call my_system.start() and insert it into the system_txs hashmap with the appropriate Systems enum as the key.
+*    Add system name to the Systems enum.
 */
 
 //Container for a component's data type.
@@ -61,13 +72,19 @@ pub enum Find {
     Pos2,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum System {
+    Position,
+}
+
 //Wrapper for EidManager and ComponentManager that utilizies their functions correctly.
 pub struct ECS {
     eid_manager: EidManager,
     component_manager: ComponentManager,
     //user hash -> eid.
     entity_ownership: HashMap<u64, Vec<usize>>,
-    //system_txs: HashMap<Find, Box<Sender<T>>>, //Transmitters to system threads. WIP
+    system_txs: HashMap<System, Box<Sender<SystemMessage>>>, //Transmitters to system threads.
+    systems_started: bool,
 }
 
 impl ECS {
@@ -76,7 +93,8 @@ impl ECS {
             eid_manager: EidManager::new(),
             component_manager: ComponentManager::new(),
             entity_ownership: HashMap::new(),
-            //system_txs: HashMap::new(),
+            system_txs: HashMap::new(),
+            systems_started: false,
         }
     }
 
@@ -88,7 +106,7 @@ impl ECS {
 
     //Creates and returns an eid mapped to a user.
     pub fn create_for(&mut self, user: &str) -> Entity {
-        let entity = self.eid_manager.create();
+        let entity = self.eid_manager.create(user);
         self.component_manager.reserve();
 
         if let Some(owned) = self.entity_ownership.get_mut(&ECS::hash(user)) {
@@ -112,7 +130,7 @@ impl ECS {
     }
 
     //Checks to see if a user owns a particular eid.
-    pub fn authenticate(&self, entity: &Entity, user: &str) -> Result<(), ErrEcs> {
+    fn authenticate(&self, entity: &Entity, user: &str) -> Result<(), ErrEcs> {
         if let Some(owned) = self.entity_ownership.get(&ECS::hash(user)) {
             if owned.iter().any(|&owned_eid| owned_eid == entity.id) {
                 Ok(())
@@ -124,22 +142,27 @@ impl ECS {
         }
     }
 
-    //WIP
-    /*pub fn start_systems(&mut self) {
-
+    //Start all systems and store their transmitter.
+    pub fn start_systems(&mut self) {
+        if self.systems_started { return }
+        self.system_txs.insert(System::Position, PositionSystem::start());
+        self.systems_started = true;
     }
 
-    fn start_system(&mut self, system: &impl System) -> Box<Send> {
-        Box::new(system.start())
+    pub fn system_send(&self, entity: &Entity, user: &str, which: System, msg: SystemMessage) -> Result<(), ErrEcs> {
+        self.authenticate(entity, user)?;
+        if !ComponentManager::entity_has_component(entity, &Find::Pos2) {
+            return Err(ErrEcs::EntityComponentNotFound(format!("send_to_position_system; entity: {:#?}", entity)));
+        }
+
+        if let Some(box_tx) = self.system_txs.get(&which) {
+            let tx = &*box_tx;
+            tx.send(msg);
+            Ok(())
+        } else {
+            Err(ErrEcs::SystemTransmitterNotFound(format!("System: {:#?}", which)))
+        }
     }
-
-    pub fn stop_systems(&mut self) {
-
-    }
-
-    fn stop_system(&mut self, system: &impl System) {
-
-    }*/
 
     pub fn get_component(&self, entity: &Entity, user: &str, which: Find) -> Result<&Component, ErrEcs> {
         self.authenticate(entity, user)?;
@@ -155,12 +178,6 @@ impl ECS {
         self.authenticate(entity, user)?;
         self.component_manager.add_component(entity, which, component)
     }
-
-    //Should probably be done only through a system.
-    /*pub fn update_component(&mut self, entity: &Entity, user: &str, which: Find, component: Component) -> Result<(), ErrEcs> {
-        self.authenticate(entity, user)?;
-        self.component_manager.update_component(entity, which, component)
-    }*/
 
     pub fn remove_component(&mut self, entity: &mut Entity, user: &str, which: Find) -> Result<(), ErrEcs> {
         self.authenticate(entity, user)?;
@@ -181,4 +198,7 @@ pub enum ErrEcs {
     ComponentAlreadyExists(String),
     EntityComponentNotFound(String),
     ComponentCategoryNotFound(String),
+
+    //Systems Errors
+    SystemTransmitterNotFound(String),
 }

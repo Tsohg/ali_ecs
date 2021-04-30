@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-
-use super::c_data::*;
 use super::eid_manager::*;
 use super::*;
 
@@ -20,7 +17,7 @@ impl ComponentManager {
         assert!(Find::VARIANT_COUNT == Component::VARIANT_COUNT - 1);
 
         //Initialize vectors to the number of total components based on the length of Find enum.
-        for i in 0..Find::VARIANT_COUNT {
+        for _i in 0..Find::VARIANT_COUNT {
             cm.components.push(vec![]);
             cm.packed_components.push(vec![]);
         }
@@ -44,7 +41,7 @@ impl ComponentManager {
     //Returns true if the entity has the specified component.
     pub fn entity_has_component(entity: &Entity, which: &Find) -> bool {
         let bit = ComponentManager::get_component_bit(which);
-        ((entity.component_bitmask & bit) == bit)
+        (entity.component_bitmask & bit) == bit
     }
 
     //Reserves memory for an entity's components.
@@ -126,7 +123,7 @@ impl ComponentManager {
             return Err(ErrEcs::ComponentAlreadyExists(format!("eid: {}, component: {:#?}", entity.id, which)))
         }
 
-        self.pack(entity, &which);
+        self.pack(entity, &which)?;
 
         entity.component_bitmask |= ComponentManager::get_component_bit(&which);
 
@@ -161,7 +158,7 @@ impl ComponentManager {
             return Err(ErrEcs::EntityComponentNotFound(format!("eid: {}, component: {:#?}", entity.id, which)))
         }
 
-        self.unpack(entity, &which);
+        self.unpack(entity, &which)?;
 
         let diff = ComponentManager::get_component_bit(&which);
         let result = self.update_component(entity, which, Component::None);
