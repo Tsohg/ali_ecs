@@ -3,7 +3,7 @@ use crate::ecs::eid_manager::Entity;
 
 //Message data that is passed into a system.
 #[derive(Debug)]
-pub enum SystemMessage{ //Position Message
+pub enum SystemMessage { //Position Message
     //Stops the system.
     Stop(),
 

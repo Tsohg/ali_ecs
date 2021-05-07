@@ -1,6 +1,8 @@
 mod ecs;
 use crate::ecs::*;
 
+use std::{thread, time};
+
 /*
 * TODO:
 *    Implement the first system to move Positions.
@@ -10,25 +12,30 @@ use crate::ecs::*;
 
 fn main() -> Result<(), ErrEcs> {
     let mut ecs = ECS::new();
-    ecs.start_systems();
-
     let user = "Alias";
     let mut entity = ecs.create_for(user);
 
     //Adding components
     ecs.add_component(&mut entity, &user, Find::Pos2, Component::Pos2(Vector2{x: 0, y: 1}))?;
 
+    //Reading cloned components.
+    let pos = ecs.read_component(&entity, &user, Find::Pos2)?;
+    println!("{:#?}", pos);
+
     //Sending a message to the position system to set the vector to something else.
     ecs.system_send(&entity, &user, System::Position,
          SystemMessage::Pos2Set(entity.clone(), Vector2{x: 300, y: 300}) //cloning entities is fine because it does not clone the data.
      )?;
 
-    //Retrieving components
-    let pos = ecs.get_component(&entity, &user, Find::Pos2)?;
-    println!("{:#?}", pos);
+     //Since system_send works on a separate thread, this tends to finish before system_send edits the field. So we sleep here a bit.
+     thread::sleep(time::Duration::from_secs(1));
 
-    //Error propagated to main which is fine. You could also handle the possible error in a match.
-    //ecs.get_component(&mut entity, "Bacon", Find::Pos2)?;
+     //Testing system_send's position set.
+     let pos = ecs.read_component(&entity, &user, Find::Pos2)?;
+     println!("{:#?}", pos);
 
-    loop { }
+     //Removing components
+     ecs.remove_component(&mut entity, &user, Find::Pos2)?;
+
+     Ok(())
 }

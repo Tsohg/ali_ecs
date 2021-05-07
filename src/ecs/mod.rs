@@ -21,7 +21,7 @@ For more details see: <http://www.gnu.org/licenses/>.
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
-use std::sync::mpsc::Sender;
+use std::sync::{Arc, RwLock};
 
 //externals
 extern crate variant_count;
@@ -53,14 +53,14 @@ use self::eid_manager::*;
 /*
 * How to add a new system:
 *    Create: ecs/systems/my_system.rs
-*       Create a message enum ecs/systems/messages. The bare minimum requires a stop message.
-*       Implement System trait's start function to start the thread and return its transmitter that uses the above message enum as its type.
-*    In start_systems(), call my_system.start() and insert it into the system_txs hashmap with the appropriate Systems enum as the key.
+*       Create variants that the system will use in SystemMessages in src/ecs/systems/messages
+*       Implement System trait's handle_message function to accept an Arc<RwLock<ComponentManager>> and the system message to handle; Then, handle the message.
 *    Add system name to the Systems enum.
+*    Add the system to the match case in system_send as the compiler will complain.
 */
 
-//Container for a component's data type.
-#[derive(Debug, VariantCount)]
+//Container for a component's data type. Each data structure must be copyable and cloneable.
+#[derive(Debug, VariantCount, Copy, Clone)]
 pub enum Component {
     Pos2(Vector2),
     None,
@@ -80,21 +80,17 @@ pub enum System {
 //Wrapper for EidManager and ComponentManager that utilizies their functions correctly.
 pub struct ECS {
     eid_manager: EidManager,
-    component_manager: ComponentManager,
+    component_manager: Arc<RwLock<ComponentManager>>,
     //user hash -> eid.
     entity_ownership: HashMap<u64, Vec<usize>>,
-    system_txs: HashMap<System, Box<Sender<SystemMessage>>>, //Transmitters to system threads.
-    systems_started: bool,
 }
 
 impl ECS {
     pub fn new() -> ECS {
         ECS {
             eid_manager: EidManager::new(),
-            component_manager: ComponentManager::new(),
+            component_manager: Arc::new(RwLock::new(ComponentManager::new())),
             entity_ownership: HashMap::new(),
-            system_txs: HashMap::new(),
-            systems_started: false,
         }
     }
 
@@ -107,7 +103,7 @@ impl ECS {
     //Creates and returns an eid mapped to a user.
     pub fn create_for(&mut self, user: &str) -> Entity {
         let entity = self.eid_manager.create(user);
-        self.component_manager.reserve();
+        self.component_manager.write().unwrap().reserve();
 
         if let Some(owned) = self.entity_ownership.get_mut(&ECS::hash(user)) {
             owned.push(entity.id);
@@ -125,7 +121,7 @@ impl ECS {
         }
 
         //free component slots and make eid available.
-        self.component_manager.free(&entity);
+        self.component_manager.write().unwrap().free(&entity);
         self.eid_manager.free(&entity);
     }
 
@@ -142,46 +138,31 @@ impl ECS {
         }
     }
 
-    //Start all systems and store their transmitter.
-    pub fn start_systems(&mut self) {
-        if self.systems_started { return }
-        self.system_txs.insert(System::Position, PositionSystem::start());
-        self.systems_started = true;
-    }
-
-    pub fn system_send(&self, entity: &Entity, user: &str, which: System, msg: SystemMessage) -> Result<(), ErrEcs> {
+    pub fn system_send(&mut self, entity: &Entity, user: &str, which: System, msg: SystemMessage) -> Result<(), ErrEcs> {
         self.authenticate(entity, user)?;
-        if !ComponentManager::entity_has_component(entity, &Find::Pos2) {
-            return Err(ErrEcs::EntityComponentNotFound(format!("send_to_position_system; entity: {:#?}", entity)));
-        }
+        let mut arc_cm = self.component_manager.clone();
 
-        if let Some(box_tx) = self.system_txs.get(&which) {
-            let tx = &*box_tx;
-            tx.send(msg);
-            Ok(())
-        } else {
-            Err(ErrEcs::SystemTransmitterNotFound(format!("System: {:#?}", which)))
+        match which {
+            System::Position => {
+                PositionSystem::handle_message(arc_cm, msg);
+                Ok(())
+            },
         }
     }
 
-    pub fn get_component(&self, entity: &Entity, user: &str, which: Find) -> Result<&Component, ErrEcs> {
+    pub fn read_component(&self, entity: &Entity, user: &str, which: Find) -> Result<Component, ErrEcs> {
         self.authenticate(entity, user)?;
-        self.component_manager.get_component(entity, &which)
-    }
-
-    pub fn get_component_mut(&mut self, entity: &Entity, user: &str, which: Find) -> Result<&mut Component, ErrEcs> {
-        self.authenticate(entity, user)?;
-        self.component_manager.get_component_mut(entity, &which)
+        self.component_manager.read().unwrap().read_component(entity, which)
     }
 
     pub fn add_component(&mut self, entity: &mut Entity, user: &str, which: Find, component: Component) -> Result<(), ErrEcs> {
         self.authenticate(entity, user)?;
-        self.component_manager.add_component(entity, which, component)
+        self.component_manager.write().unwrap().add_component(entity, which, component)
     }
 
     pub fn remove_component(&mut self, entity: &mut Entity, user: &str, which: Find) -> Result<(), ErrEcs> {
         self.authenticate(entity, user)?;
-        self.component_manager.remove_component(entity, which)
+        self.component_manager.write().unwrap().remove_component(entity, which)
     }
 }
 
@@ -198,7 +179,4 @@ pub enum ErrEcs {
     ComponentAlreadyExists(String),
     EntityComponentNotFound(String),
     ComponentCategoryNotFound(String),
-
-    //Systems Errors
-    SystemTransmitterNotFound(String),
 }

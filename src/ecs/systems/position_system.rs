@@ -1,31 +1,29 @@
-use std::sync::mpsc;
-use std::sync::mpsc::Sender;
-use std::sync::mpsc::Receiver;
 use std::thread;
+use std::sync::{Arc, RwLock};
 
 use super::*;
+use crate::ecs::c_data::*;
+use crate::ecs::eid_manager::Entity;
+use crate::ecs::{Component, Find};
 
 pub struct PositionSystem {}
 
-impl SystemStart for PositionSystem {
-    fn start() -> Box<Sender<SystemMessage>> {
-        let (tx, rx): (Sender<SystemMessage>, Receiver<SystemMessage>) = mpsc::channel();
-        thread::spawn(move|| {
-            loop {
-                match rx.recv() {
-                    Ok(msg) => {
-                        match msg {
-                            SystemMessage::Stop() => break,
-                            SystemMessage::Pos2Set(en, v2) => { //TODO: Replace with function calls.
-                                //cm.update_component(&en, Find::Pos2, Component::Pos2(v2)); //PROBLEM
-                            },
-                            _ => println!("Catch all: {:#?}", msg),
-                        }
-                    },
-                    Err(e) => println!("{}", e)
-                }
+/*impl PositionSystem {
+    fn set_pos2(cm: &mut ComponentManager, entity: Entity, v2: Vector2) {
+
+    }
+}*/
+
+impl HandleSystemMessage for PositionSystem {
+    fn handle_message(cm: Arc<RwLock<ComponentManager>>, msg: SystemMessage) {
+        thread::spawn(move||{
+            match msg {
+                SystemMessage::Pos2Set(en, v2) => {
+                    cm.write().unwrap().set_component(&en, &Find::Pos2, Component::Pos2(v2));
+                    ()
+                },
+                _ => ()
             }
         });
-        Box::new(tx)
     }
 }
