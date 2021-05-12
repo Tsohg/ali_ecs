@@ -3,29 +3,10 @@ use std::sync::RwLock;
 use super::eid_manager::*;
 use super::*;
 
-pub struct ComponentManager {
-    components: Vec<Vec<RwLock<Component>>>,
-    packed_components: Vec<RwLock<Vec<usize>>>, //Component -> eids using it.
-}
+pub struct ComponentManager {}
 
 //Define getter/setter for each component.
 impl ComponentManager {
-    pub fn new() -> ComponentManager {
-        let mut cm = ComponentManager {
-            components: vec![],
-            packed_components: vec![],
-        };
-
-        assert!(Find::VARIANT_COUNT == Component::VARIANT_COUNT - 1);
-
-        //Initialize vectors to the number of total components based on the length of Find enum.
-        for _i in 0..Find::VARIANT_COUNT {
-            cm.components.push(vec![]);
-            cm.packed_components.push(RwLock::new(vec![]));
-        }
-        cm
-    }
-
     //Get the vector index of a particular set of components.
     pub fn get_component_id(which: &Find) -> usize {
         match which {
@@ -47,15 +28,15 @@ impl ComponentManager {
     }
 
     //Reserves memory for an entity's components.
-    pub fn reserve(&mut self) {
-        for vec in self.components.iter_mut() {
+    pub fn reserve(component_data: Arc<RwLock<ComponentData>>) {
+        for vec in component_data.write().unwrap().components.iter_mut() {
             vec.push(RwLock::new(Component::None));
         }
     }
 
     //Adds an entry in the packed array for the given entity.
-    pub fn pack(&mut self, entity: &Entity, which: &Find) -> Result<(), ErrEcs> {
-        match self.packed_components.get_mut(ComponentManager::get_component_id(which)) {
+    pub fn pack(component_data: Arc<RwLock<ComponentData>>, entity: &Entity, which: &Find) -> Result<(), ErrEcs> {
+        match component_data.read().unwrap().packed_components.get(ComponentManager::get_component_id(which)) {
             Some(vec) => {
                 vec.write().unwrap().push(entity.id);
                 Ok(())
@@ -65,8 +46,8 @@ impl ComponentManager {
     }
 
     //Removes an entry in the packed array for the given entity.
-    pub fn unpack(&mut self, entity: &Entity, which: &Find) -> Result<(), ErrEcs>  {
-        match self.packed_components.get_mut(ComponentManager::get_component_id(which)) {
+    pub fn unpack(component_data: Arc<RwLock<ComponentData>>, entity: &Entity, which: &Find) -> Result<(), ErrEcs>  {
+        match component_data.read().unwrap().packed_components.get(ComponentManager::get_component_id(which)) {
             Some(vec) => {
                 vec.write().unwrap().remove(entity.id);
                 Ok(())
@@ -76,18 +57,24 @@ impl ComponentManager {
     }
 
     //Frees the component slots at eid.
-    pub fn free(&mut self, entity: &Entity) {
-        for vec in self.components.iter_mut() {
-            match vec.get_mut(entity.id) {
-                Some(c) => *c = RwLock::new(Component::None),
+    pub fn free(component_data: Arc<RwLock<ComponentData>>, entity: &Entity) {
+        for vec in component_data.read().unwrap().components.iter() {
+            match vec.get(entity.id) {
+                Some(c) => *c.write().unwrap() = Component::None,
                 None => ()
+            }
+        }
+
+        for vec in component_data.read().unwrap().packed_components.iter() {
+            if vec.read().unwrap().iter().any(|&eid| eid == entity.id) {
+                vec.write().unwrap().remove(entity.id);
             }
         }
     }
 
     //Returns a clone of the component data for reading.
-    pub fn read_component(&self, entity: &Entity, which: Find) -> Result<Component, ErrEcs> {
-        match self.components.get(ComponentManager::get_component_id(&which)) {
+    pub fn read_component(component_data: Arc<RwLock<ComponentData>>, entity: &Entity, which: Find) -> Result<Component, ErrEcs> {
+        match component_data.read().unwrap().components.get(ComponentManager::get_component_id(&which)) {
             Some(vec) => match vec.get(entity.id) {
                 Some(cmp) => Ok(*cmp.read().unwrap()),
                 None => Err(ErrEcs::EidOutOfBounds(format!("eid: {}", entity.id)))
@@ -97,33 +84,33 @@ impl ComponentManager {
     }
 
     //Adds the given component to the entity.
-    pub fn add_component(&mut self, entity: &mut Entity, which: Find, component: Component) -> Result<(), ErrEcs> {
+    pub fn add_component(component_data: Arc<RwLock<ComponentData>>, entity: &mut Entity, which: Find, component: Component) -> Result<(), ErrEcs> {
         if ComponentManager::entity_has_component(entity, &which) {
             return Err(ErrEcs::ComponentAlreadyExists(format!("eid: {}, component: {:#?}", entity.id, which)))
         }
-        self.pack(entity, &which)?;
-        self.set_component(entity, &which, component)?;
+        ComponentManager::pack(component_data.clone(), entity, &which)?;
+        ComponentManager::set_component(component_data.clone(), entity, &which, component)?;
         entity.component_bitmask |= ComponentManager::get_component_bit(&which);
         Ok(())
     }
 
     //Removes the given component from the entity.
-    pub fn remove_component(&mut self, entity: &mut Entity, which: Find) -> Result<(), ErrEcs> {
+    pub fn remove_component(component_data: Arc<RwLock<ComponentData>>, entity: &mut Entity, which: Find) -> Result<(), ErrEcs> {
         if !ComponentManager::entity_has_component(entity, &which) {
             return Err(ErrEcs::EntityComponentNotFound(format!("eid: {}, component: {:#?}", entity.id, which)))
         }
-        self.unpack(entity, &which)?;
-        self.set_component(entity, &which, Component::None)?;
+        ComponentManager::unpack(component_data.clone(), entity, &which)?;
+        ComponentManager::set_component(component_data.clone(), entity, &which, Component::None)?;
         entity.component_bitmask -= ComponentManager::get_component_bit(&which);
         Ok(())
     }
 
     //Sets an entity's component.
-    pub fn set_component(&mut self, entity: &Entity, which: &Find, component: Component) -> Result<(), ErrEcs> {
-        match self.components.get_mut(ComponentManager::get_component_id(&which)) {
-            Some(vec) => match vec.get_mut(entity.id) {
+    pub fn set_component(component_data: Arc<RwLock<ComponentData>>, entity: &Entity, which: &Find, component: Component) -> Result<(), ErrEcs> {
+        match component_data.read().unwrap().components.get(ComponentManager::get_component_id(&which)) {
+            Some(vec) => match vec.get(entity.id) {
                 Some(data) => {
-                    *data = RwLock::new(component);
+                    *data.write().unwrap() = component;
                     Ok(())
                 },
                 None => Err(ErrEcs::EidOutOfBounds(format!("eid: {}", entity.id)))
